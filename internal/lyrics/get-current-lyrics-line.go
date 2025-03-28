@@ -74,8 +74,14 @@ func GetCurrentLyricsLine(lyrics string, songDuration, songPosition float64) (mo
 	if currentLineIdx >= 0 && currentLineIdx < len(lines) {
 		// Clean the line by removing timestamps
 		cleanLine := timestampPattern.ReplaceAllString(lines[currentLineIdx], "")
+		
+		cleanNextLine := ""
+    if currentLineIdx+1 < len(lines) {
+        cleanNextLine = timestampPattern.ReplaceAllString(lines[currentLineIdx+1], "")
+    }
 		return models.LyricsStatus{
 			CurrentLine: strings.TrimSpace(cleanLine),
+			NextLine: strings.TrimSpace(cleanNextLine),
 			TimeToNext:  *timeToNextLine,
 		}, nil
 	}

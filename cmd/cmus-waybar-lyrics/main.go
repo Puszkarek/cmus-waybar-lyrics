@@ -65,7 +65,7 @@ func main() {
 		}
 
 		// Get the time until the next line should be displayed
-		waybar.RenderLyrics(lyricsStatus)
+		waybar.RenderLyrics(lyricsStatus, currentSong)
 
 		// If we know when the next line should appear, sleep until then
 		if lyricsStatus.TimeToNext > 0 {
