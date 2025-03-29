@@ -21,10 +21,13 @@ A Go-based lyrics display for [cmus](https://github.com/cmus/cmus) music player 
 Add the following to your Waybar configuration file (typically `~/.config/waybar/config`):
 
 ```
-"custom/lyrics": {
-    "exec": "/path/to/cmus-waybar-lyrics",
+ "custom/lyrics": {
+    "exec": "cmus-waybar-lyrics",
+    "format": "{} <span font='11' fgalpha='50%' style='italic'>{alt}</span>",
+    "restart-interval": 5,
     "return-type": "json",
-    "on-click": "killall -SIGUSR1 cmus-waybar-lyrics"
+    "signal": 1,  // SIGRTMIN+1
+    "tooltip": true
 }
 ```
 
