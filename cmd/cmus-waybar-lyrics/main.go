@@ -51,13 +51,13 @@ func main() {
 			currentSong = song
 		}
 
-		if utils.IsEmptyString(currentSong.Lyrics) && utils.IsNotEmptyString(currentSong.Artist) && utils.IsNotEmptyString(currentSong.Title) {
+		if len(currentSong.ParsedLyrics) == 0 && utils.IsNotEmptyString(currentSong.Artist) && utils.IsNotEmptyString(currentSong.Title) {
 			waybar.RenderSongStatus(currentSong)
 			time.Sleep(time.Second * 2)
 			return
 		}
 
-		lyricsStatus, err := lyrics.GetCurrentLyricsLine(currentSong.Lyrics, songStatus.Duration, songStatus.Position)
+		lyricsStatus, err := lyrics.GetDisplayLyrics(currentSong.ParsedLyrics, songStatus.Duration, songStatus.Position)
 		if err != nil {
 			fmt.Println("Error getting current lyrics line:", err)
 			time.Sleep(time.Second * 2)

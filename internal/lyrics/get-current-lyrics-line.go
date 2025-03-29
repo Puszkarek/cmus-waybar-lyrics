@@ -3,89 +3,100 @@ package lyrics
 import (
 	"errors"
 	"math"
-	"regexp"
-	"strconv"
-	"strings"
 
 	"github.com/puszkarek/cmus-waybar-lyrics/internal/models"
 )
 
-// gets the current line of lyrics based on song position
-func GetCurrentLyricsLine(lyrics string, songDuration, songPosition float64) (models.LyricsStatus, error) {
-	if lyrics == "" || songDuration <= 0 {
+// Check if any lines have timestamps
+func containsTimestamps(lines []models.LyricLine) bool {
+	for _, line := range lines {
+		if line.Timestamp >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+
+// Find line info for timestamped lyrics
+func findTimestampBasedLineInfo(lines []models.LyricLine, position float64) (int, float64) {
+	currentIndex := 0
+	timeToNext := math.Inf(1) // Default to infinity if no next line
+	
+	// Find current line (last line with timestamp <= position)
+	for i, line := range lines {
+		if line.Timestamp >= 0 && line.Timestamp <= position {
+			currentIndex = i
+		}
+	}
+	
+	// Find time to next line
+	for _, line := range lines {
+		if line.Timestamp >= 0 && line.Timestamp > position {
+			nextTime := line.Timestamp - position
+			if nextTime < timeToNext {
+				timeToNext = nextTime
+			}
+		}
+	}
+	
+	return currentIndex, timeToNext
+}
+
+// Find line info for untimed lyrics
+func findUDurationBasedLineInfo(lines []models.LyricLine, position, duration float64) (int, float64) {
+	lineCount := len(lines)
+	currentIndex := int(position * float64(lineCount) / duration)
+	
+	// Calculate time to next line
+	timeToNext := math.Inf(1) // Default to infinity
+	if currentIndex < lineCount-1 {
+		timePerLine := duration / float64(lineCount)
+		timeToNext = timePerLine - math.Mod(position, timePerLine)
+	}
+	
+	return currentIndex, timeToNext
+}
+
+// Get next line text safely
+func getNextLineText(lines []models.LyricLine, currentIndex int) string {
+	if currentIndex+1 < len(lines) {
+		return lines[currentIndex+1].Text
+	}
+	return ""
+}
+
+
+
+// Find current line index and time to next line
+func findCurrentLineInfo(lines []models.LyricLine, position, duration float64, hasTimestamps bool) (int, float64) {
+	if hasTimestamps {
+		return findTimestampBasedLineInfo(lines, position)
+	}
+	return findUDurationBasedLineInfo(lines, position, duration)
+}
+
+
+// Gets the current line of lyrics based on song position using immutable data approach
+func GetDisplayLyrics(lyricLines []models.LyricLine, songDuration, songPosition float64) (models.LyricsStatus, error) {
+	if len(lyricLines) == 0 || songDuration <= 0 {
 		return models.LyricsStatus{}, errors.New("invalid lyrics or song duration")
 	}
 
-	// Regex pattern to match timestamp formats like [02:48.93]
-	timestampPattern := regexp.MustCompile(`\[(\d+):(\d+)\.(\d+)\]`)
-
-	// Split lyrics into lines
-	lines := strings.Split(lyrics, "\n")
-	if len(lines) == 0 {
-		return models.LyricsStatus{}, errors.New("no lyrics found")
+	// Determine if we have timestamped lyrics
+	hasTimestamps := containsTimestamps(lyricLines)
+	
+	// Find current line and time to next line
+	currentIndex, timeToNext := findCurrentLineInfo(lyricLines, songPosition, songDuration, hasTimestamps)
+	
+	if currentIndex < 0 || currentIndex >= len(lyricLines) {
+		return models.LyricsStatus{}, errors.New("no current line found")
 	}
-
-	// Extract timestamps from each line if available
-	timestamps := make([]float64, len(lines))
-	hasTimestamps := false
-
-	for i, line := range lines {
-		timestampMatch := timestampPattern.FindStringSubmatch(line)
-		if len(timestampMatch) > 0 {
-			minutes, _ := strconv.Atoi(timestampMatch[1])
-			seconds, _ := strconv.Atoi(timestampMatch[2])
-			milliseconds, _ := strconv.Atoi(timestampMatch[3])
-			timeInSeconds := float64(minutes)*60 + float64(seconds) + float64(milliseconds)/100
-			timestamps[i] = timeInSeconds
-			hasTimestamps = true
-		} else {
-			timestamps[i] = -1 // Using -1 to indicate no timestamp
-		}
-	}
-
-	// Determine current line index
-	currentLineIdx := 0
-	var timeToNextLine *float64
-
-	if hasTimestamps {
-		// Find the appropriate line based on current position
-		nextLineFound := false
-		for i, timestamp := range timestamps {
-			if timestamp >= 0 && timestamp <= songPosition {
-				currentLineIdx = i
-			} else if timestamp >= 0 && timestamp > songPosition && !nextLineFound {
-				nextTime := timestamp - songPosition
-				timeToNextLine = &nextTime
-				nextLineFound = true
-			}
-		}
-	} else {
-		// Fall back to the original method if no timestamps
-		currentLineIdx = int(songPosition * float64(len(lines)) / songDuration)
-		// Estimate time to next line
-		if currentLineIdx < len(lines)-1 {
-			timePerLine := songDuration / float64(len(lines))
-			nextTime := timePerLine - math.Mod(songPosition, timePerLine)
-			timeToNextLine = &nextTime
-		}
-	}
-
-	// Return the current line if it's valid
-	if currentLineIdx >= 0 && currentLineIdx < len(lines) {
-		// Clean the line by removing timestamps
-		cleanLine := timestampPattern.ReplaceAllString(lines[currentLineIdx], "")
-		
-		cleanNextLine := ""
-    if currentLineIdx+1 < len(lines) {
-        cleanNextLine = timestampPattern.ReplaceAllString(lines[currentLineIdx+1], "")
-    }
-		return models.LyricsStatus{
-			CurrentLine: strings.TrimSpace(cleanLine),
-			NextLine: strings.TrimSpace(cleanNextLine),
-			TimeToNext:  *timeToNextLine,
-		}, nil
-	}
-
-	return models.LyricsStatus{}, errors.New("no current line found")
+	
+	// Build result with immutable values
+	return models.LyricsStatus{
+		CurrentLine: lyricLines[currentIndex].Text,
+		NextLine:    getNextLineText(lyricLines, currentIndex),
+		TimeToNext:  timeToNext,
+	}, nil
 }
-
